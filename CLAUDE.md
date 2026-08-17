@@ -1,0 +1,45 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project status
+
+The Chat is a project aiming for effective chatting with AI models. It's early-stage but no longer just a scaffold: a Go backend serves a React frontend as a single embedded binary. A git repository has been initialized (no commits yet as of this writing).
+
+## Architecture
+
+- `web/` — React 19 + TypeScript frontend, built with Vite. `npm run build` outputs to `web/dist`.
+- `web/web.go` (`package web`) — embeds `web/dist` via `//go:embed all:dist` and exposes `web.Dist embed.FS`. This file lives inside `web/`, next to `dist/`, specifically so the embed pattern doesn't need `..`: `go:embed` patterns can only reach downward from the source file's own directory, so the embedding code has to be colocated with (or above) the directory it embeds.
+- `internal/server` (`package server`) — `server.New(fs.FS) http.Handler` serves static files from the given filesystem and falls back to `index.html` for any path that doesn't match a real file, so client-side routing (react-router) works on page reloads/deep links. It's decoupled from `embed` — it just takes an `fs.FS`, so it could be pointed at `os.DirFS("web/dist")` for a disk-backed dev mode instead of the embedded copy if that's ever wanted.
+- `cmd/the-chat-server/main.go` — entrypoint. Wires `web.Dist` → `fs.Sub(..., "dist")` → `server.New(...)` → `http.ListenAndServe`. Listens on `0.0.0.0:8080` by default (overridable with `-addr`).
+
+Because `go:embed` reads `web/dist` at compile time, the frontend must be built *before* `go build`/`go run` — there's no dev-mode split yet where the Go server proxies to the Vite dev server. `make build` handles the ordering.
+
+## Commands
+
+Root (`Makefile`):
+- `make build` — `npm --prefix web run build`, then `go build -o bin/the-chat-server ./cmd/the-chat-server`
+- `make run` — `make build`, then runs `./bin/the-chat-server`
+
+Go:
+- `go build ./...`, `go vet ./...`, `gofmt -l .` — no test files exist yet (`*_test.go`).
+
+Frontend (`web/`):
+- `npm run dev` — Vite dev server (bound to `0.0.0.0`)
+- `npm run build` — type-check (`tsc -b`) then build with Vite
+- `npm run lint` — Oxlint
+- `npm run preview` — preview the production build
+- No test runner configured yet.
+
+## Web stack notes
+
+- React 19 + TypeScript, bundled with Vite 8 (rolldown-vite) and `@vitejs/plugin-react`. Routing is `react-router-dom` (`BrowserRouter` in `main.tsx`, `Routes`/`Route` in `App.tsx`).
+- shadcn/ui is installed (`--template vite -b base`, Base UI primitives, Nova preset): `components.json`, `src/components/ui/`, `src/lib/utils.ts`. The `@` path alias (`./src`) is configured in both `vite.config.ts` and the `tsconfig.*.json` files' `paths` (no `baseUrl` — it's deprecated under this TS version's `moduleResolution: "bundler"`, and `paths` resolves relative to the tsconfig without it).
+- Tailwind CSS v4 via `@tailwindcss/vite`, imported in `src/index.css`.
+- `src/index.css` carries two token systems that both need to stay in sync: the site's own tokens (`--text`, `--text-h`, `--bg`, `--code-bg`) and shadcn's tokens (`--background`, `--foreground`, `--border`, `--accent`, etc., which shadcn normally toggles via a `.dark` class). Since this project has no theme-toggle mechanism, both sets are switched together by the same plain `@media (prefers-color-scheme: dark)` block — the `.dark` class's values are duplicated into it so shadcn components also follow the OS theme automatically. If a manual toggle is ever added, that duplication should be reconsidered.
+- Linting is via Oxlint (`web/.oxlintrc.json`), not ESLint. Type-aware lint rules are not enabled by default; see `web/README.md` for how to add them via `oxlint-tsgolint` if needed.
+- `tsconfig.json` is a project-references root pointing at `tsconfig.app.json` (app code) and `tsconfig.node.json` (Vite config).
+
+## Known gaps
+
+No tests (Go or frontend), no CI, no `LICENSE`. `main.go` uses raw `http.ListenAndServe` with no timeouts or graceful shutdown — fine for local dev, worth revisiting before deploying anywhere real.
