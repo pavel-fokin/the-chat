@@ -8,14 +8,14 @@ The Chat is a project aiming for effective chatting with AI models. It's early-s
 
 ## Project principles
 
-The project should respect the following four principles on any layer.
+The project should respect the following four principles on any layer — code, design, UX, and development process alike.
 
-1. **Cognitive state is structurually bounded.** Only a limited amount of structured information can fit into active focus. It includes number of information chunks and also abstraction levels.  
-2. **Processing cognitive state is serial.** The conscious processing and understanding of information strictly serial. 
-3. **State is constructed from signals.** The state creates the recent understanding, so understanding is built from pieaces that are in focus.
-4. **Acquired cognitive structures are unstable.** Once constructed, an understanding does not remain intact by itself. Objects may change, relashioships may weaken, parts become hard to reach. 
+1. **Cognitive state is structurally bounded.** Only a limited amount of structured information can fit into active focus — both the number of information chunks and the number of abstraction levels.
+2. **Processing cognitive state is serial.** Conscious processing and understanding of information is strictly serial.
+3. **State is constructed from signals.** Understanding is built only from what's currently in focus — so information should be explicit, not assumed; anything left implicit won't be picked up.
+4. **Acquired cognitive structures are unstable.** Once constructed, understanding doesn't stay intact on its own — objects change, relationships weaken, parts become hard to reach. Favor structure (types, names, boundaries) as the durable record over prose that can drift out of sync.
 
-The project should be built to reduce cognitive load and all levels. Less code, words straight to the point, less documentation, but not trade for correctness.
+The project should be built to reduce cognitive load at all levels. Less code, words straight to the point, less documentation, but not trade for correctness.
 
 ## Architecture
 
