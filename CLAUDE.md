@@ -4,10 +4,6 @@ One limitless conversation with LLM models — no "New Chat" button, no thread
 list. Context usage is visible, and Clear empties it. Full intent:
 `docs/01-product.md`.
 
-## Project status
-
-Early-stage but no longer just a scaffold: a Go backend serves a React frontend as a single embedded binary, and a domain layer has started to take shape.
-
 ## Project principles
 
 The project should respect the following four principles on any layer — code, design, UX, and development process alike.
@@ -34,16 +30,24 @@ Rules under `.claude/rules/` are absent from this table on purpose. They carry
 `paths:` frontmatter and load themselves when you open a file they match, so
 there is nothing to decide.
 
-## Planning vs building
+## Three stages, three sessions
 
-Plan in a separate session, in plan mode (`Shift+Tab` or `/plan`).
+Never plan and build in one session. Each stage starts clean and ends with an
+artifact the next stage can read without the transcript.
 
-- A planning session ends with Linear issues that carry acceptance criteria.
-  It does not end with a list of steps.
-- Ask which decisions the work forces and what each costs. Don't ask for a
-  step-by-step walkthrough.
-- A decision that came up while planning becomes an ADR before building starts.
-- If the plan runs past one screen, the issue is too big. Split the issue.
+| Stage | Takes | Produces | Ends when |
+|---|---|---|---|
+| Pre-planning | a feature idea | ordered issue stubs, title + one line each | every slice has a name and a position |
+| Planning | one stub | one Linear issue with criteria, plus doc changes | the criteria are written and the docs are merged |
+| Building | one issue | one branch, merged | every criterion passes |
+
+Pre-planning is conditional. Skip it when the feature is already one slice —
+splitting a single slice produces nothing. Run it when a feature holds several,
+so planning never has to hold more than one at a time.
+
+Plan in plan mode (`Shift+Tab` or `/plan`). Ask which decisions the work forces
+and what each costs. Don't ask for a step-by-step walkthrough. If the plan runs
+past one screen, the issue is too big — split the issue, not the plan.
 
 Each issue is one vertical slice: the smallest change that runs end to end
 and can be watched working. Never split by layer — a model with no caller
@@ -53,6 +57,40 @@ can't be verified on its own.
 - A new domain concept isn't an issue. It lands as an ADR first, before any
   slice uses it.
 - A test isn't an issue. It belongs in a slice's acceptance criteria.
+
+### What a Linear issue must carry
+
+The issue is the handoff. A building session starts cold and sees only this, so
+anything left in the planning transcript is lost. Team: **The Chat**.
+
+- **Title** — one slice, one observable outcome.
+- **Job** — which job from `docs/01-product.md` this serves. No job, no issue.
+- **Acceptance criteria** — observable conditions, checkable by running the app.
+  "Sending a message shows the reply in the thread", not "wire up the handler".
+  Written before building starts, or the issue is too big.
+- **Applies** — the ADRs, product constraints, and rules that govern this slice.
+  Name them, so the building session doesn't rediscover them.
+- **Out of scope** — what this slice deliberately doesn't do.
+
+Use the branch name Linear generates for the issue. Move it to In Progress when
+building starts, In Review at the PR.
+
+### Which docs change in which stage
+
+| Stage | Doc changes |
+|---|---|
+| Pre-planning | none |
+| Planning | an ADR if a decision surfaced; `01-product.md` if the job or a constraint is new |
+| Building | `03-features.md` when the slice ships; `02-system.md` if the domain model changed |
+
+Docs the planning stage owes are merged before building starts. A decision left
+in a transcript drifts even while the code stays fine.
+
+### When the process itself gets in the way
+
+File it as a Linear issue with the `process` label, under the same rule as any
+other problem you spot mid-session. The first few runs will produce several, and
+that is the point — the process is being tested too.
 
 ## Decisions and rules
 
@@ -92,9 +130,10 @@ about every small thing, and don't stay quiet about it either.
 
 ## Session boundaries
 
-- One session, one Linear issue, one branch.
+- One session, one stage, one artifact. Building is also one branch.
 - Spot an unrelated problem? Don't fix it here. File a separate issue and
-  stay on the current task.
+  stay on the current task — fixing it breaks the boundary, filing it protects
+  the boundary.
 - Never auto-approve creating or editing an issue. Always confirm.
 
 Working several issues at once is fine, one worktree each:
@@ -105,44 +144,19 @@ And claim the ADR number when you open the issue, not when you write the entry.
 ## Architecture
 
 One binary: the React frontend is compiled into the Go server via `go:embed`.
+Layout and rationale are in `docs/02-system.md` — the one thing worth carrying
+every session is the build order.
 
-| Path | Holds |
-|---|---|
-| `web/` | React 19 + TypeScript, Vite → `web/dist` |
-| `web/web.go` | `//go:embed all:dist` → `web.Dist embed.FS` |
-| `internal/server` | `New(fs.FS) http.Handler`, `index.html` fallback for client routes |
-| `internal/thechat` | domain entities (`User`, `ID[T]`) — no HTTP, no storage |
-| `cmd/the-chat-server` | wiring + `http.ListenAndServe` |
-
-**The frontend must be built before `go build`** — `go:embed` reads `web/dist` at
-compile time. `make build` orders them. No dev-mode split yet.
-
-Why any of it is shaped this way: `docs/02-system.md` §Decisions.
+**The frontend must be built before `go build`.** `go:embed` reads `web/dist` at
+compile time, so `go build` alone uses a stale `dist`. `make build` orders them.
+No dev-mode split yet.
 
 ## Commands
 
-Root (`Makefile`):
-- `make build` — `npm --prefix web run build`, then `go build -o bin/the-chat-server ./cmd/the-chat-server`
-- `make run` — `make build`, then runs `./bin/the-chat-server`
-
-Go:
-- `go build ./...`, `go vet ./...`, `gofmt -l .` — no test files exist yet (`*_test.go`).
-
-Frontend (`web/`):
-- `npm run dev` — Vite dev server (bound to `0.0.0.0`)
-- `npm run build` — type-check (`tsc -b`) then build with Vite
-- `npm run lint` — Oxlint
-- `npm run preview` — preview the production build
-- No test runner configured yet.
-
-## Web stack notes
-
-- React 19 + TypeScript, bundled with Vite 8 (rolldown-vite) and `@vitejs/plugin-react`. Routing is `react-router-dom` (`BrowserRouter` in `main.tsx`, `Routes`/`Route` in `App.tsx`).
-- shadcn/ui is installed (`--template vite -b base`, Base UI primitives, Nova preset): `components.json`, `src/components/ui/`, `src/lib/utils.ts`. The `@` path alias (`./src`) is configured in both `vite.config.ts` and the `tsconfig.*.json` files' `paths` (no `baseUrl` — it's deprecated under this TS version's `moduleResolution: "bundler"`, and `paths` resolves relative to the tsconfig without it).
-- Tailwind CSS v4 via `@tailwindcss/vite`, imported in `src/index.css`.
-- `src/index.css` carries two token systems that both need to stay in sync: the site's own tokens (`--text`, `--text-h`, `--bg`, `--code-bg`) and shadcn's tokens (`--background`, `--foreground`, `--border`, `--accent`, etc., which shadcn normally toggles via a `.dark` class). Since this project has no theme-toggle mechanism, both sets are switched together by the same plain `@media (prefers-color-scheme: dark)` block — the `.dark` class's values are duplicated into it so shadcn components also follow the OS theme automatically. If a manual toggle is ever added, that duplication should be reconsidered.
-- Linting is via Oxlint (`web/.oxlintrc.json`), not ESLint. Type-aware lint rules are not enabled by default; see `web/README.md` for how to add them via `oxlint-tsgolint` if needed.
-- `tsconfig.json` is a project-references root pointing at `tsconfig.app.json` (app code) and `tsconfig.node.json` (Vite config).
+- `make install` / `make build` / `make run` — see the `Makefile`
+- `go build ./...`, `go vet ./...`, `gofmt -l .` — no `*_test.go` files yet
+- `npm --prefix web run dev` — Vite with hot reload, frontend only
+- `npm --prefix web run lint` — Oxlint. No test runner configured yet.
 
 ## Writing
 
